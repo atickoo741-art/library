@@ -317,14 +317,14 @@ as $$
       li.*,
       case
         when q is null or q = '' then 0::real
-        else ts_rank_cd(li.search_tsv, websearch_to_tsquery('english', q))::real
+        else ts_rank_cd(li.search_tsv, websearch_to_tsquery('english'::regconfig, q))::real
       end as rank
     from public.library_items li
     where li.publish_status = 'published'
       and (
         q is null
         or q = ''
-        or li.search_tsv @@ websearch_to_tsquery('english', q)
+        or li.search_tsv @@ websearch_to_tsquery('english'::regconfig, q)
       )
       and (content_type is null or li.content_type = content_type)
       and (difficulty is null or li.difficulty = difficulty)
