@@ -70,13 +70,9 @@ create table if not exists public.library_items (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   publish_status text not null default 'published' check (publish_status in ('published', 'archived')),
-  search_tsv tsvector generated always as (
-    -- NOTE: generated columns require IMMUTABLE expressions; cast configs to regconfig.
-    setweight(to_tsvector('english'::regconfig, coalesce(title, '')), 'A') ||
-    setweight(to_tsvector('english'::regconfig, coalesce(abstract, '')), 'B') ||
-    setweight(to_tsvector('english'::regconfig, coalesce(body_md, '')), 'C') ||
-    setweight(to_tsvector('simple'::regconfig, array_to_string(coalesce(tags, '{}'::text[]), ' ')), 'B')
-  ) stored
+  -- NOTE: we maintain search_tsv via trigger (generated columns require IMMUTABLE expressions,
+  -- and some hosted Postgres builds mark full-text functions as STABLE).
+  search_tsv tsvector not null default ''::tsvector
 );
 
 create unique index if not exists library_items_slug_unique on public.library_items (slug);
@@ -117,6 +113,26 @@ drop trigger if exists library_items_set_updated_at on public.library_items;
 create trigger library_items_set_updated_at
 before update on public.library_items
 for each row execute procedure public.set_updated_at();
+
+create or replace function public.library_items_update_search_tsv()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.search_tsv :=
+    setweight(to_tsvector('english'::regconfig, coalesce(new.title, '')), 'A') ||
+    setweight(to_tsvector('english'::regconfig, coalesce(new.abstract, '')), 'B') ||
+    setweight(to_tsvector('english'::regconfig, coalesce(new.body_md, '')), 'C') ||
+    setweight(to_tsvector('simple'::regconfig, array_to_string(coalesce(new.tags, '{}'::text[]), ' ')), 'B');
+  return new;
+end;
+$$;
+
+drop trigger if exists library_items_update_search_tsv on public.library_items;
+create trigger library_items_update_search_tsv
+before insert or update of title, abstract, body_md, tags
+on public.library_items
+for each row execute procedure public.library_items_update_search_tsv();
 
 drop trigger if exists submissions_set_updated_at on public.submissions;
 create trigger submissions_set_updated_at
