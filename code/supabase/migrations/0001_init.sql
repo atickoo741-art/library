@@ -71,10 +71,11 @@ create table if not exists public.library_items (
   updated_at timestamptz not null default now(),
   publish_status text not null default 'published' check (publish_status in ('published', 'archived')),
   search_tsv tsvector generated always as (
-    setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
-    setweight(to_tsvector('english', coalesce(abstract, '')), 'B') ||
-    setweight(to_tsvector('english', coalesce(body_md, '')), 'C') ||
-    setweight(to_tsvector('simple', array_to_string(coalesce(tags, '{}'::text[]), ' ')), 'B')
+    -- NOTE: generated columns require IMMUTABLE expressions; cast configs to regconfig.
+    setweight(to_tsvector('english'::regconfig, coalesce(title, '')), 'A') ||
+    setweight(to_tsvector('english'::regconfig, coalesce(abstract, '')), 'B') ||
+    setweight(to_tsvector('english'::regconfig, coalesce(body_md, '')), 'C') ||
+    setweight(to_tsvector('simple'::regconfig, array_to_string(coalesce(tags, '{}'::text[]), ' ')), 'B')
   ) stored
 );
 
